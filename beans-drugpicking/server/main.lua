@@ -1,5 +1,7 @@
 lib = lib or {}
 
+local XPBridge = 'beans-xpbridge'
+
 ---@param playerLevel number
 ---@return number amount, number duration
 local function CalculateTieredPickup(playerLevel)
@@ -16,20 +18,30 @@ local function CalculateTieredPickup(playerLevel)
     return itemAmount, pickupDuration
 end
 
----@param src number
----@param zoneKey string
-lib.callback.register('beans-picking:attemptPickup', function(src, zoneKey)
+-- Step 1: Return only the pickup duration (for use with progress bar)
+lib.callback.register('beans-picking:getPickupDuration', function(src, zoneKey)
     local zone = Config.CircleZones[zoneKey]
-    if not zone then return false, 0 end
+    if not zone then return 0 end
+
+    local playerLevel = exports[XPBridge]:GetLevel(src, Config.XPCategory) or 0
+    local _, duration = CalculateTieredPickup(playerLevel)
+    return duration
+end)
+
+-- Step 2: Finalize pickup and give item + XP
+RegisterNetEvent('beans-picking:completePickup', function(zoneKey)
+    local src = source
+    local zone = Config.CircleZones[zoneKey]
+    if not zone then return end
 
     local item = zone.item
-    if not item then return false, 0 end
+    if not item then return end
 
-    local playerLevel = exports['pickle_xp']:GetCurrentXPLevel(src, Config.XPCategory) or 0
-    local amount, pickupDuration = CalculateTieredPickup(playerLevel)
+    local playerLevel = exports[XPBridge]:GetLevel(src, Config.XPCategory) or 0
+    local amount = CalculateTieredPickup(playerLevel)
+    if type(amount) == "table" then amount = amount[1] end
 
     local added = exports.ox_inventory:AddItem(src, item, amount)
-
     if added then
         TriggerClientEvent('ox_inventory:displayItemBox', src, item, 'add')
 
@@ -41,28 +53,13 @@ lib.callback.register('beans-picking:attemptPickup', function(src, zoneKey)
         })
 
         if Config.XPRewardPerPickup and Config.XPCategory then
-            exports['pickle_xp']:AddPlayerXP(src, Config.XPCategory, Config.XPRewardPerPickup)
+            exports[XPBridge]:AddXP(src, Config.XPCategory, Config.XPRewardPerPickup)
         end
-
-        return true, pickupDuration
     else
         TriggerClientEvent('ox_lib:notify', src, {
             title = 'Inventory Full',
             description = 'You can’t carry more!',
             type = 'error'
         })
-        return false, 0
     end
-end)
-
-RegisterNetEvent('beans-picking:pickedUpCannabis', function()
-    handlePickup(source, 'WeedField')
-end)
-
-RegisterNetEvent('beans-picking:pickedUpChemicals', function()
-    handlePickup(source, 'ChemicalField')
-end)
-
-RegisterNetEvent('beans-picking:pickedUpCocas', function()
-    handlePickup(source, 'CocaField')
 end)
