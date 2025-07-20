@@ -1,7 +1,5 @@
 Config = {}
 
-Config.SharedPickupXPType = 'drug'
-
 -- Tiered reward amounts based on level
 Config.SharedPickupTiers = {
     [1] = 1,    -- level 1+
